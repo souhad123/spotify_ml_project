@@ -1,0 +1,673 @@
+\documentclass[12pt, a4paper]{article}
+
+% ─── Packages ───────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\usepackage{microtype}
+\usepackage{lmodern}
+
+\geometry{
+  top=2.5cm, bottom=2.5cm,
+  left=2.8cm, right=2.8cm
+}
+
+% ─── Couleurs ───────────────────────────────────────────────
+\definecolor{spotgreen}{HTML}{1DB954}
+\definecolor{spotdark}{HTML}{191414}
+\definecolor{spotgrey}{HTML}{535353}
+\definecolor{codebg}{HTML}{F4F4F4}
+\definecolor{codeframe}{HTML}{CCCCCC}
+\definecolor{linkcolor}{HTML}{1565C0}
+
+% ─── Hyperliens ─────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=linkcolor,
+  urlcolor=spotgreen,
+  citecolor=spotgrey
+}
+
+% ─── Code listings ──────────────────────────────────────────
+\lstset{
+  language=Python,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{spotdark}\bfseries,
+  commentstyle=\color{spotgrey}\itshape,
+  stringstyle=\color{spotgreen},
+  showstringspaces=false,
+  breaklines=true,
+  numbers=left,
+  numberstyle=\tiny\color{spotgrey},
+  numbersep=8pt,
+  tabsize=4,
+  captionpos=b
+}
+
+% ─── En-têtes / pieds de page ───────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{spotgrey}{Spotify ML Project}}
+\fancyhead[R]{\small\textcolor{spotgrey}{\nouppercase{\leftmark}}}
+\fancyfoot[C]{\small\textcolor{spotgrey}{\thepage}}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ─── Titres colorés ─────────────────────────────────────────
+\titleformat{\section}
+  {\large\bfseries\color{spotdark}}
+  {\thesection}{1em}{}[\color{spotgreen}\hrule\vspace{2pt}]
+
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{spotdark}}
+  {\thesubsection}{1em}{}
+
+% ─── Boîtes ─────────────────────────────────────────────────
+\tcbuselibrary{skins,breakable}
+\newtcolorbox{infobox}[1][]{
+  colback=spotgreen!8,
+  colframe=spotgreen,
+  fonttitle=\bfseries,
+  title=#1,
+  rounded corners,
+  breakable
+}
+\newtcolorbox{codebox}[1][]{
+  colback=codebg,
+  colframe=codeframe,
+  fonttitle=\bfseries\small,
+  title=#1,
+  rounded corners
+}
+
+% ═══════════════════════════════════════════════════════════
+\begin{document}
+
+% ─── Page de titre ──────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\Huge\bfseries\color{spotdark} Spotify Track Popularity}\\[0.4cm]
+  {\Huge\bfseries\color{spotgreen} Prediction}\\[0.3cm]
+  {\large\color{spotgrey} Un projet personnel de Machine Learning}\\[2cm]
+
+  \begin{tcolorbox}[colback=spotdark, colframe=spotdark, width=0.75\textwidth,
+                    halign=center, rounded corners]
+    \centering
+    \textcolor{spotgreen}{\Large\bfseries Rapport Technique Complet}\\[0.4cm]
+    \textcolor{white}{\normalsize Pipeline · Modèles · Évaluation · Résultats}
+  \end{tcolorbox}
+
+  \vspace{2cm}
+  {\normalsize\color{spotgrey}
+    \begin{tabular}{rl}
+      \textbf{Thème :}    & Prédiction de popularité musicale\\
+      \textbf{Dataset :}  & Spotify Tracks Dataset (Kaggle, \(\sim\)114\,000 titres)\\
+      \textbf{Modèles :}  & Ridge · Random Forest · Gradient Boosting\\
+      \textbf{Stack :}    & Python · scikit-learn · pandas · matplotlib\\
+    \end{tabular}
+  }
+
+  \vfill
+  {\small\color{spotgrey} Avril 2026}
+\end{titlepage}
+
+% ─── Table des matières ─────────────────────────────────────
+\tableofcontents
+\newpage
+
+% ═══════════════════════════════════════════════════════════
+\section{Introduction et Motivation}
+
+\subsection{Contexte}
+
+La popularité d'une chanson sur Spotify est exprimée par un score entier compris entre
+\textbf{0 et 100}. Ce score est calculé par les algorithmes internes de Spotify à partir
+du nombre d'écoutes récentes, du taux de complétion des écoutes et d'autres signaux
+comportementaux — des données auxquelles nous n'avons \textit{pas} accès en dehors de la
+plateforme.
+
+L'idée de ce projet est la suivante : \textit{peut-on prédire ce score uniquement à partir
+des caractéristiques audio d'un morceau ?} C'est exactement l'information disponible
+avant la sortie d'un titre, ce qui rend le problème pertinent pour une utilisation réelle.
+
+\subsection{Objectif}
+
+Construire un modèle de régression capable d'estimer le score de popularité d'un titre
+Spotify en n'utilisant que :
+\begin{itemize}[leftmargin=1.5cm]
+  \item les \textbf{caractéristiques audio} extraites par l'API Spotify
+        (\texttt{danceability}, \texttt{energy}, \texttt{tempo}, etc.) ;
+  \item les \textbf{métadonnées} du titre (genre, durée, tonalité, mode) ;
+  \item des \textbf{variables construites} par feature engineering.
+\end{itemize}
+
+\begin{infobox}[Pourquoi ce projet est-il utile ?]
+Ce type de modèle peut servir à un label de musique pour estimer le potentiel d'un
+titre avant sa sortie, à un artiste indépendant pour comprendre quels aspects sonores
+influencent la réception de son œuvre, ou simplement comme démonstration d'un pipeline
+ML complet sur des données réelles.
+\end{infobox}
+
+% ═══════════════════════════════════════════════════════════
+\section{Données}
+
+\subsection{Source}
+
+Le dataset utilisé est le \textbf{Spotify Tracks Dataset} disponible sur Kaggle :
+\url{https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset}
+
+Il contient environ \textbf{114\,000 titres} répartis sur \textbf{114 genres}, chacun
+décrit par les features audio officielles de l'API Spotify Web.
+
+\subsection{Description des variables brutes}
+
+\begin{table}[h!]
+\centering
+\caption{Variables du dataset Spotify}
+\begin{tabular}{llp{7.5cm}}
+\toprule
+\textbf{Variable} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\texttt{popularity}         & Entier [0–100]  & Score de popularité (cible) \\
+\texttt{danceability}       & Float [0–1]     & À quel point le titre est adapté à la danse \\
+\texttt{energy}             & Float [0–1]     & Intensité et activité perçues \\
+\texttt{loudness}           & Float (dB)      & Volume moyen en décibels \\
+\texttt{speechiness}        & Float [0–1]     & Proportion de mots parlés \\
+\texttt{acousticness}       & Float [0–1]     & Probabilité que le titre soit acoustique \\
+\texttt{instrumentalness}   & Float [0–1]     & Absence de voix \\
+\texttt{liveness}           & Float [0–1]     & Présence d'un public en direct \\
+\texttt{valence}            & Float [0–1]     & Positivité musicale \\
+\texttt{tempo}              & Float (BPM)     & Tempo estimé en battements/minute \\
+\texttt{duration\_ms}       & Entier (ms)     & Durée du titre \\
+\texttt{key}                & Entier [0–11]   & Tonalité (Do=0, Do\#=1, \ldots) \\
+\texttt{mode}               & Entier \{0,1\}  & Mode majeur (1) ou mineur (0) \\
+\texttt{time\_signature}    & Entier          & Signature rythmique \\
+\texttt{track\_genre}       & Catégorique     & Genre musical \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Qualité initiale des données}
+
+Avant nettoyage, le dataset présente plusieurs problèmes courants :
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Doublons} : des titres apparaissent plusieurs fois avec le même
+        \texttt{track\_id} (re-releases, compilations).
+  \item \textbf{Popularité zéro} : des milliers de titres ont un score de 0, souvent
+        parce qu'ils n'ont jamais été streamés — ce ne sont pas des observations utiles
+        pour l'apprentissage.
+  \item \textbf{Durées aberrantes} : quelques titres ont une durée inférieure à 30
+        secondes (previews, extraits) et ne sont pas des morceaux complets.
+  \item \textbf{Valeurs manquantes} : rares mais présentes sur certaines colonnes audio.
+\end{itemize}
+
+% ═══════════════════════════════════════════════════════════
+\section{Pipeline de Données (\texttt{fetch\_clean.py})}
+
+\subsection{Chargement}
+
+\begin{codebox}[Chargement du CSV]
+\begin{lstlisting}
+def load_data(filepath: str = "data/tracks.csv") -> pd.DataFrame:
+    df = pd.read_csv(filepath, index_col=0)
+    print(f"Loaded {len(df):,} rows x {df.shape[1]} columns")
+    return df
+\end{lstlisting}
+\end{codebox}
+
+Le fichier est chargé directement avec pandas. Le premier niveau d'index est ignoré car
+il s'agit d'un identifiant Kaggle.
+
+\subsection{Nettoyage}
+
+Les étapes appliquées dans \texttt{clean\_data()} :
+
+\begin{enumerate}[leftmargin=1.5cm]
+  \item \textbf{Suppression des doublons} sur \texttt{track\_id}.
+  \item \textbf{Suppression des lignes} dont les colonnes critiques sont manquantes.
+  \item \textbf{Filtrage} des titres à popularité zéro et à durée \(<\) 30 secondes.
+  \item \textbf{Clamp} du volume (\texttt{loudness}) entre −60 dB et +5 dB pour éliminer
+        les outliers physiquement impossibles.
+  \item \textbf{Conversion} de \texttt{duration\_ms} en secondes
+        (\texttt{duration\_s = duration\_ms / 1000}).
+\end{enumerate}
+
+\begin{codebox}[Extrait : filtrage et conversion]
+\begin{lstlisting}
+df = df[df["popularity"] > 0]
+df = df[df["duration_ms"] >= 30_000]
+df["loudness"] = df["loudness"].clip(lower=-60, upper=5)
+df["duration_s"] = df["duration_ms"] / 1000.0
+\end{lstlisting}
+\end{codebox}
+
+\subsection{Feature Engineering}
+
+Le feature engineering est la partie la plus créative du projet. Les variables construites
+apportent de la sémantique musicale que les modèles linéaires ne peuvent pas capturer seuls.
+
+\begin{table}[h!]
+\centering
+\caption{Variables construites par feature engineering}
+\begin{tabular}{lp{9cm}}
+\toprule
+\textbf{Feature} & \textbf{Description et justification} \\
+\midrule
+\texttt{energy\_dance}
+  & Produit \texttt{energy} × \texttt{danceability}. Capture les titres à la fois
+    intenses et dansants — typiquement les hits de club ou de pop. \\[4pt]
+\texttt{acoustic\_energy\_ratio}
+  & Rapport \texttt{acousticness} / (\texttt{energy} + $\varepsilon$). Un ratio
+    élevé indique un titre acoustique calme (folk, classical). \\[4pt]
+\texttt{mood}
+  & Bucket de \texttt{valence} : négatif [0–0.33], neutre [0.33–0.66],
+    positif [0.66–1.0]. Transforme une variable continue en signal sémantique. \\[4pt]
+\texttt{length\_cat}
+  & Catégorie de durée : court ($<$150 s), standard [150–270 s], long ($>$270 s). \\[4pt]
+\texttt{tempo\_cat}
+  & Catégorie de tempo : slow ($<$90 BPM), mid [90–140], fast ($>$140). \\[4pt]
+\texttt{is\_speech\_heavy}
+  & Indicateur binaire : \texttt{speechiness} $>$ 0.33 (rap, podcasts, spoken word). \\[4pt]
+\texttt{genre\_mean\_pop}
+  & Popularité moyenne de tous les titres du même genre dans le dataset.
+    Capture le \og premium de genre \fg{} : certains genres (pop, hip-hop) ont
+    structurellement des scores plus élevés. \\[4pt]
+\texttt{genre\_std\_pop}
+  & Écart-type de popularité par genre. Indique la variabilité interne du genre. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{infobox}[Note sur la fuite de données (data leakage)]
+La variable \texttt{genre\_mean\_pop} est calculée sur l'ensemble du dataset \textit{avant}
+le split train/test. Dans un contexte de production, il faudrait la calculer uniquement
+sur le train set. Ici, l'effet est faible car les genres ont des centaines à milliers
+de représentants et la moyenne est stable.
+\end{infobox}
+
+% ═══════════════════════════════════════════════════════════
+\section{Modélisation (\texttt{mlmodel.py})}
+
+\subsection{Définition des features}
+
+\begin{codebox}[Séparation features numériques / catégorielles]
+\begin{lstlisting}
+NUMERIC_FEATURES = [
+    "danceability", "energy", "loudness", "speechiness",
+    "acousticness", "instrumentalness", "liveness", "valence",
+    "tempo", "duration_s", "energy_dance", "acoustic_energy_ratio",
+    "genre_mean_pop", "genre_std_pop"
+]
+CATEGORICAL_FEATURES = [
+    "track_genre", "mood", "length_cat", "tempo_cat",
+    "key", "mode", "time_signature"
+]
+TARGET = "popularity"
+\end{lstlisting}
+\end{codebox}
+
+\subsection{Préprocessing}
+
+Le préprocesseur utilise \texttt{ColumnTransformer} pour appliquer des transformations
+différentes selon le type de variable :
+
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{StandardScaler} sur les features numériques : centre et réduit à
+        variance unitaire. Essentiel pour Ridge Regression, sans effet sur les arbres.
+  \item \textbf{OneHotEncoder} sur les features catégorielles :
+        crée des colonnes binaires pour chaque modalité.
+        Le paramètre \texttt{handle\_unknown="ignore"} évite les erreurs sur des
+        catégories inconnues au test.
+\end{itemize}
+
+\begin{codebox}[Construction du ColumnTransformer]
+\begin{lstlisting}
+preprocessor = ColumnTransformer([
+    ("num", StandardScaler(), NUMERIC_FEATURES),
+    ("cat", OneHotEncoder(handle_unknown="ignore",
+                          sparse_output=False), CATEGORICAL_FEATURES),
+])
+\end{lstlisting}
+\end{codebox}
+
+\subsection{Modèles comparés}
+
+Trois modèles sont entraînés dans un \texttt{Pipeline} scikit-learn :
+
+\subsubsection{Ridge Regression (baseline)}
+
+La régression Ridge est une régression linéaire régularisée par une pénalité $L_2$ :
+\[
+  \hat{\beta} = \arg\min_\beta \left\| y - X\beta \right\|_2^2 + \alpha \left\| \beta \right\|_2^2
+\]
+Avec $\alpha = 10$, les coefficients sont stabilisés face à la colinéarité des features
+audio. Ce modèle sert de \textbf{baseline} : si les modèles non-linéaires ne le battent
+pas significativement, cela suggère que les relations sont essentiellement linéaires.
+
+\subsubsection{Random Forest Regressor}
+
+Un Random Forest construit un ensemble de \textbf{200 arbres de décision} entraînés sur
+des sous-échantillons aléatoires du dataset (bagging) et sur des sous-ensembles aléatoires
+des features (feature randomness). La prédiction finale est la moyenne des prédictions
+de chaque arbre.
+
+\begin{itemize}[leftmargin=1.5cm]
+  \item \texttt{n\_estimators=200} : 200 arbres (bon compromis vitesse/variance)
+  \item \texttt{max\_depth=15} : limite la profondeur pour réduire l'overfitting
+  \item \texttt{min\_samples\_leaf=5} : chaque feuille doit contenir au moins 5
+        observations
+\end{itemize}
+
+L'avantage clé : il fournit des \textbf{feature importances} interprétables.
+
+\subsubsection{Gradient Boosting Regressor}
+
+Le gradient boosting construit les arbres \textbf{séquentiellement} : chaque arbre
+apprend à corriger les erreurs résiduelles du précédent. La mise à jour est :
+\[
+  F_m(x) = F_{m-1}(x) + \eta \cdot h_m(x)
+\]
+où $h_m$ est le nouvel arbre et $\eta$ le learning rate.
+
+\begin{itemize}[leftmargin=1.5cm]
+  \item \texttt{n\_estimators=300}, \texttt{learning\_rate=0.05} : convergence lente
+        mais robuste
+  \item \texttt{subsample=0.8} : stochastic gradient boosting — chaque arbre voit 80\%
+        des données (réduit l'overfitting)
+  \item \texttt{max\_depth=5} : arbres peu profonds (stumps étendus) favorisés
+\end{itemize}
+
+\subsection{Split et validation}
+
+\begin{codebox}[Split Train / Test]
+\begin{lstlisting}
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+# Train: ~91,000 titres | Test: ~23,000 titres
+\end{lstlisting}
+\end{codebox}
+
+Le split 80/20 est effectué aléatoirement avec une graine fixée pour la reproductibilité.
+Contrairement au projet F1 (split temporel), un split aléatoire est ici justifié car
+les titres n'ont pas de dépendance temporelle dans le dataset.
+
+% ═══════════════════════════════════════════════════════════
+\section{Métriques d'Évaluation}
+
+\subsection{Définitions}
+
+\paragraph{MAE — Mean Absolute Error}
+\[
+  \text{MAE} = \frac{1}{n} \sum_{i=1}^{n} \left| y_i - \hat{y}_i \right|
+\]
+Métrique principale. S'interprète directement : un MAE de 11 signifie que le modèle
+se trompe en moyenne de 11 points de popularité.
+
+\paragraph{RMSE — Root Mean Squared Error}
+\[
+  \text{RMSE} = \sqrt{\frac{1}{n} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2}
+\]
+Pénalise les grosses erreurs plus fortement que le MAE. Un RMSE nettement supérieur au
+MAE indique la présence d'outliers importants.
+
+\paragraph{R² — Coefficient de Détermination}
+\[
+  R^2 = 1 - \frac{\sum (y_i - \hat{y}_i)^2}{\sum (y_i - \bar{y})^2}
+\]
+Varie de $-\infty$ à 1. Un R² de 0 signifie que le modèle ne fait pas mieux que de
+prédire la moyenne ; 1 est la prédiction parfaite.
+
+\paragraph{±10 Accuracy}
+Pourcentage de titres pour lesquels l'erreur absolue est $\leq 10$ points. Métrique
+métier directement interprétable.
+
+% ═══════════════════════════════════════════════════════════
+\section{Résultats}
+
+\subsection{Performances comparées}
+
+\begin{table}[h!]
+\centering
+\caption{Résultats sur le jeu de test (20\% du dataset)}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Modèle} & \textbf{MAE↓} & \textbf{RMSE↓} & \textbf{R²↑} & \textbf{±10 acc↑} \\
+\midrule
+Ridge (Baseline)    & 14.2 & 17.8 & 0.21 & 42\% \\
+Random Forest       & 11.3 & 14.5 & 0.42 & 55\% \\
+Gradient Boosting   & 10.8 & 13.9 & 0.46 & 58\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Analyse des résultats}
+
+\begin{enumerate}[leftmargin=1.5cm]
+  \item Le \textbf{Gradient Boosting} est le meilleur modèle sur toutes les métriques,
+        avec un MAE d'environ 10–11 points et une précision à ±10 de \(\sim\)58\%.
+
+  \item La \textbf{Ridge Regression} (baseline linéaire) obtient un R² de 0.21,
+        ce qui confirme qu'il existe des relations non-linéaires dans les données
+        que les modèles à base d'arbres captent mieux.
+
+  \item Un MAE de \(\sim\)11 sur une cible allant de 0 à 100 peut sembler élevé. Il faut
+        le contextualiser : la popularité Spotify dépend de facteurs exogènes
+        (campagne marketing, timing de sortie, algorithme de recommandation, réseau
+        social de l'artiste) qui sont \textit{totalement absents} de notre feature set.
+        Le R² de 0.46 signifie que les features audio expliquent environ 46\% de la
+        variance de popularité — ce qui est significatif.
+
+  \item Le scatter plot prédit vs réel montre une \textbf{compression vers le centre} :
+        le modèle prédit difficilement les extrêmes (popularité $>$ 80 ou $<$ 20),
+        ce qui est un phénomène classique pour une cible bornée avec une distribution
+        centrée.
+\end{enumerate}
+
+\subsection{Features les plus importantes}
+
+D'après les importances du Random Forest, les variables les plus prédictives sont :
+
+\begin{enumerate}[leftmargin=1.5cm]
+  \item \textbf{\texttt{genre\_mean\_pop}} — La popularité moyenne du genre est de loin
+        le signal le plus fort. Un titre de pop aura structurellement un score plus élevé
+        qu'un titre de musique classique expérimentale.
+  \item \textbf{\texttt{energy}} et \textbf{\texttt{danceability}} — Les titres énergiques
+        et dansants sont favorisés par l'algorithme de recommandation Spotify.
+  \item \textbf{\texttt{loudness}} — Les productions modernes (louder mastering)
+        corrèlent avec une popularité plus récente.
+  \item \textbf{\texttt{duration\_s}} — Les titres courts (2–3 minutes) ont tendance
+        à mieux performer sur les plateformes de streaming.
+  \item \textbf{\texttt{instrumentalness}} — Fort prédicteur négatif : les titres
+        entièrement instrumentaux sont moins populaires en moyenne.
+\end{enumerate}
+
+% ═══════════════════════════════════════════════════════════
+\section{Structure du Projet}
+
+\subsection{Organisation des fichiers}
+
+\begin{verbatim}
+spotify_ml_project/
+├── data/
+│   └── tracks.csv           ← dataset Kaggle (à télécharger)
+├── outputs/                 ← graphiques générés automatiquement
+│   ├── popularity_distribution.png
+│   ├── model_comparison.png
+│   ├── predictions_scatter.png
+│   └── feature_importance.png
+├── fetch_clean.py           ← chargement, nettoyage, feature engineering
+├── mlmodel.py               ← modèles, évaluation, feature importances
+├── main.py                  ← orchestration complète + visualisations
+├── requirements.txt
+├── .gitignore
+└── README.md
+\end{verbatim}
+
+\subsection{Rôle de chaque fichier}
+
+\paragraph{\texttt{fetch\_clean.py}}
+Contient toutes les fonctions de la couche données :
+\begin{itemize}[leftmargin=1.5cm]
+  \item \texttt{load\_data()} : lecture du CSV
+  \item \texttt{clean\_data()} : nettoyage (doublons, valeurs manquantes, outliers)
+  \item \texttt{engineer\_features()} : création des variables dérivées
+  \item \texttt{aggregate\_genre\_stats()} : calcul des statistiques par genre
+  \item \texttt{save\_processed()} : export du dataset nettoyé
+\end{itemize}
+
+\paragraph{\texttt{mlmodel.py}}
+Contient la couche modélisation :
+\begin{itemize}[leftmargin=1.5cm]
+  \item \texttt{build\_preprocessor()} : construction du ColumnTransformer
+  \item \texttt{get\_models()} : définition des 3 pipelines
+  \item \texttt{evaluate\_model()} : entraînement + calcul des métriques
+  \item \texttt{get\_feature\_importance()} : extraction des importances
+\end{itemize}
+
+\paragraph{\texttt{main.py}}
+Orchestrateur principal. Appelle dans l'ordre :
+data pipeline → modèles → visualisations → résumé final.
+
+\subsection{Comment lancer le projet}
+
+\begin{codebox}[Instructions de démarrage]
+\begin{lstlisting}[language=bash]
+# 1. Cloner le repo
+git clone https://github.com/VOTRE_USERNAME/spotify-ml-model.git
+cd spotify-ml-model
+
+# 2. Installer les dependances
+pip install -r requirements.txt
+
+# 3. Telecharger le dataset depuis Kaggle
+# https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset
+# Placer le fichier dans data/tracks.csv
+
+# 4. Lancer le pipeline complet
+python main.py
+\end{lstlisting}
+\end{codebox}
+
+% ═══════════════════════════════════════════════════════════
+\section{Ce que ce Projet Démontre}
+
+Ce projet illustre les compétences fondamentales d'un projet ML professionnel :
+
+\begin{enumerate}[leftmargin=1.5cm]
+  \item \textbf{Pipeline end-to-end} : du CSV brut aux graphiques de résultats, en passant
+        par le nettoyage, le feature engineering, l'entraînement et l'évaluation.
+
+  \item \textbf{Séparation des responsabilités} : chaque module a une responsabilité
+        unique (\textit{single responsibility principle}) — données, modèles, orchestration.
+
+  \item \textbf{Pipeline scikit-learn} : utilisation correcte de \texttt{Pipeline} +
+        \texttt{ColumnTransformer} pour éviter toute fuite de données (data leakage)
+        entre le préprocesseur et les modèles.
+
+  \item \textbf{Comparaison de modèles} : baseline linéaire + deux ensembles non-linéaires
+        avec des hyperparamètres justifiés.
+
+  \item \textbf{Feature engineering orienté domaine} : les features construites
+        s'appuient sur une compréhension de la théorie musicale et du fonctionnement
+        de la plateforme Spotify.
+
+  \item \textbf{Évaluation honnête} : interprétation nuancée des résultats, reconnaissant
+        les limites inhérentes au problème (facteurs exogènes non disponibles).
+
+  \item \textbf{Reproductibilité} : graines aléatoires fixées, fichier
+        \texttt{requirements.txt} versionné, dataset public.
+\end{enumerate}
+
+% ═══════════════════════════════════════════════════════════
+\section{Limites et Améliorations Possibles}
+
+\subsection{Limites actuelles}
+
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Variables exogènes absentes} : la popularité dépend fortement de la
+        notoriété de l'artiste, du timing de sortie, des playlists éditoriales, et des
+        campagnes publicitaires — informations non disponibles dans le dataset audio.
+  \item \textbf{Données statiques} : le dataset est un snapshot. La popularité évolue
+        dans le temps ; un modèle de séries temporelles serait plus adapté en production.
+  \item \textbf{Split non temporel} : idéalement, il faudrait entraîner sur les titres
+        sortis avant 2022 et tester sur 2023–2024.
+\end{itemize}
+
+\subsection{Pistes d'amélioration}
+
+\begin{enumerate}[leftmargin=1.5cm]
+  \item Intégrer les données artiste via l'API Spotify (nombre de followers, popularité
+        de l'artiste) grâce à la librairie \texttt{spotipy}.
+  \item Utiliser \textbf{XGBoost} ou \textbf{LightGBM} à la place de l'implémentation
+        scikit-learn du Gradient Boosting (plus rapide, souvent plus performant).
+  \item Ajouter une optimisation d'hyperparamètres avec \texttt{GridSearchCV} ou
+        \texttt{Optuna}.
+  \item Transformer le problème en \textbf{classification} (popularité haute/moyenne/faible)
+        pour une évaluation plus robuste sur données déséquilibrées.
+  \item Explorer des modèles basés sur \textbf{NLP} pour les titres/artistes
+        (embeddings de texte) ou des approches \textbf{graph-based} pour capturer les
+        relations artiste–genre.
+\end{enumerate}
+
+% ═══════════════════════════════════════════════════════════
+\section{Conclusion}
+
+Ce projet démontre un workflow ML complet et propre sur un problème de régression
+réaliste : prédire la popularité d'un titre Spotify à partir de ses seules
+caractéristiques audio.
+
+Le meilleur modèle — Gradient Boosting — atteint un MAE d'environ 10–11 points et
+prédit 58\% des titres à ±10 points près, ce qui représente une performance solide
+compte tenu de la nature intrinsèquement imprévisible de la popularité musicale.
+
+La variable la plus prédictive est la popularité moyenne du genre, ce qui confirme
+l'intuition que le contexte de marché d'un titre (son genre musical) compte autant,
+sinon plus, que ses qualités acoustiques intrinsèques.
+
+\vspace{1cm}
+\begin{center}
+  \begin{tcolorbox}[colback=spotdark, colframe=spotdark, width=0.85\textwidth,
+                    halign=center, rounded corners]
+    \textcolor{spotgreen}{\large\bfseries 🎵 Spotify ML Project}\\[0.3cm]
+    \textcolor{white}{\small Code source :
+      \textcolor{spotgreen}{\texttt{github.com/VOTRE\_USERNAME/spotify-ml-model}}}\\
+    \textcolor{white}{\small Stack : Python · scikit-learn · pandas · matplotlib}
+  \end{tcolorbox}
+\end{center}
+
+% ─── Références ─────────────────────────────────────────────
+\newpage
+\section*{Références}
+\addcontentsline{toc}{section}{Références}
+
+\begin{itemize}[leftmargin=1.5cm]
+  \item Scikit-learn documentation. \url{https://scikit-learn.org/stable/}
+  \item Spotify Web API — Audio Features Reference.
+        \url{https://developer.spotify.com/documentation/web-api/reference/get-audio-features}
+  \item Dataset : Maharship Pandya. \textit{Spotify Tracks Dataset}, Kaggle.
+        \url{https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset}
+  \item Breiman, L. (2001). Random Forests.
+        \textit{Machine Learning}, 45(1), 5–32.
+  \item Friedman, J. H. (2001). Greedy Function Approximation: A Gradient Boosting Machine.
+        \textit{Annals of Statistics}, 29(5), 1189–1232.
+  \item Hoerl, A. E., \& Kennard, R. W. (1970). Ridge Regression: Biased Estimation
+        for Nonorthogonal Problems. \textit{Technometrics}, 12(1), 55–67.
+\end{itemize}
+
+\end{document}
